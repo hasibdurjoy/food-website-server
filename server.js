@@ -14,13 +14,13 @@ app.use(express.json());
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.8ngda.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
+
 async function run() {
   try {
     await client.connect();
-    console.log('connected to database');
     const database = client.db("foodDelivery");
     const serviceCollection = database.collection("services");
-    const cart_Collection = database.collection("cart");
+    const orderCollection = database.collection("orders");
 
     // load courses get api
     app.get("/services", async (req, res) => {
@@ -49,42 +49,64 @@ async function run() {
       res.json(course);
     });
 
+    app.get("/services", async (req, res) => {
+      const course = await serviceCollection.find({}).toArray();
+      res.json(course);
+    });
+
+    //get all orders
+    app.get("/orders", async (req, res) => {
+      const course = await orderCollection.find({}).toArray();
+      res.json(course);
+    });
+
     // load cart data according to user id get api
-    app.get("/cart/:uid", async (req, res) => {
-      const uid = req.params.uid;
+    app.get("/myOrders", async (req, res) => {
+      const uid = req.query.uid;
+      console.log(uid);
       const query = { uid: uid };
-      const result = await cart_Collection.find(query).toArray();
+      const result = await orderCollection.find(query).toArray();
       res.json(result);
     });
+
+
 
     // add data to cart collection with additional info
-    app.post("/services/add", async (req, res) => {
+    app.post("/orders", async (req, res) => {
       const course = req.body;
-      const result = await cart_Collection.insertOne(course);
+      const result = await orderCollection.insertOne(course);
       res.json(result);
     });
 
-    // delete data from cart delete api
-    app.delete("/delete/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: ObjectId(id) };
-      const result = await cart_Collection.deleteOne(query);
+    app.post('/services', async (req, res) => {
+      const service = req.body;
+      const result = await serviceCollection.insertOne(service)
       res.json(result);
     });
+
+    //UPDATE API
+    app.put('/orders/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: ObjectId(id) };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          status: "approved"
+        },
+      };
+      const result = await orderCollection.updateOne(filter, updateDoc, options)
+      console.log('updating', id)
+      res.json(result)
+    })
 
     // purchase delete api
-    app.delete("/purchase/:uid", async (req, res) => {
-      const uid = req.params.uid;
-      const query = { uid: uid };
-      const result = await cart_Collection.deleteMany(query);
+    app.delete("/orders/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectId(id) };
+      const result = await orderCollection.deleteOne(query);
       res.json(result);
     });
 
-    // orders get api
-    app.get("/orders", async (req, res) => {
-      const result = await cart_Collection.find({}).toArray();
-      res.json(result);
-    });
   } finally {
     // await client.close();
   }
@@ -92,8 +114,8 @@ async function run() {
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
-    res.send("server is running");
-  });
+  res.send("server is running");
+});
 
 app.listen(port, () => {
   console.log(`listening at http://localhost:${port}`);
